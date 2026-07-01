@@ -18,6 +18,8 @@ model Organization {
   lists     LeadList[]
   leads     Lead[]
   templates Template[]
+  campaigns Campaign[]
+  emailLogs EmailLog[]
 }
 
 model User {
@@ -81,6 +83,7 @@ model Mailbox {
   updatedAt        DateTime @updatedAt
 
   domain           Domain   @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  campaigns        Campaign[]
 }
 
 model LeadList {
@@ -93,6 +96,7 @@ model LeadList {
 
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   leads          Lead[]
+  campaigns      Campaign[]
 }
 
 model Lead {
@@ -116,6 +120,7 @@ model Lead {
 
   organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   list             LeadList?    @relation(fields: [listId], references: [id], onDelete: SetNull)
+  emailLogs        EmailLog[]
 
   @@unique([organizationId, email])
 }
@@ -131,4 +136,43 @@ model Template {
   updatedAt      DateTime @updatedAt
 
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  campaigns      Campaign[]
+}
+
+model Campaign {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  listId         String
+  templateId     String
+  mailboxId      String
+  status         String   @default("DRAFT") // DRAFT, SCHEDULED, RUNNING, PAUSED, COMPLETED
+  scheduledAt    DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  list           LeadList     @relation(fields: [listId], references: [id], onDelete: Restrict)
+  template       Template     @relation(fields: [templateId], references: [id], onDelete: Restrict)
+  mailbox        Mailbox      @relation(fields: [mailboxId], references: [id], onDelete: Restrict)
+  emailLogs      EmailLog[]
+}
+
+model EmailLog {
+  id             String   @id @default(cuid())
+  organizationId String
+  campaignId     String?
+  leadId         String
+  subject        String
+  body           String   @db.Text
+  status         String   @default("QUEUED") // QUEUED, SENT, FAILED, BOUNCED, OPENED, REPLIED
+  messageId      String?  // SMTP Message ID
+  error          String?  @db.Text
+  sentAt         DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  campaign       Campaign?    @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  lead           Lead         @relation(fields: [leadId], references: [id], onDelete: Cascade)
 }
