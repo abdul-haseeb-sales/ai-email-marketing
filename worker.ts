@@ -31,6 +31,7 @@ const campaignWorker = new Worker("email-sending-queue", async (job: Job) => {
     const leads = await prisma.lead.findMany({
       where: {
         listId: campaign.listId,
+        status: { notIn: ["UNSUBSCRIBED", "BOUNCED"] },
         emailLogs: {
           none: { campaignId: campaign.id } // Only leads without an email log for this campaign
         }
@@ -93,6 +94,12 @@ const emailSenderWorker = new Worker("email-sender-queue", async (job: Job) => {
     const parsedBody = parseTemplateVariables(template.body, lead);
     const parsedSubject = parseTemplateVariables(template.subject, lead);
 
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+    const unsubscribeLink = `${appUrl}/unsubscribe?leadId=${lead.id}`;
+    
+    // Append unsubscribe link
+    const finalBody = `${parsedBody}\n\n--\nIf you no longer wish to receive these emails, you can unsubscribe here: ${unsubscribeLink}`;
+
     try {
       const transporter = nodemailer.createTransport({
         host: mailbox.smtpHost!,
@@ -108,7 +115,7 @@ const emailSenderWorker = new Worker("email-sender-queue", async (job: Job) => {
         from: `"${mailbox.displayName || mailbox.email}" <${mailbox.email}>`,
         to: lead.email,
         subject: parsedSubject,
-        text: parsedBody,
+        text: finalBody,
       });
 
       console.log(`✅ Sent email to ${lead.email} - MsgID: ${info.messageId}`);
@@ -119,7 +126,7 @@ const emailSenderWorker = new Worker("email-sender-queue", async (job: Job) => {
           campaignId: campaign.id,
           leadId: lead.id,
           subject: parsedSubject,
-          body: parsedBody,
+          body: finalBody,
           status: "SENT",
           messageId: info.messageId,
           sentAt: new Date()
