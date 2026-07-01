@@ -159,10 +159,104 @@ import { Queue } from "bullmq";
 const campaignWorkerQueue = new Queue("email-sending-queue", { connection });
 const emailWorkerQueue = new Queue("email-sender-queue", { connection });
 
+// IMAP Sync Worker for Replies and Bounces
+import { ImapFlow } from "imapflow";
+
+const imapSyncWorker = new Worker("imap-sync-queue", async (job: Job) => {
+  if (job.name === "sync-mailbox") {
+    const { mailboxId } = job.data;
+    
+    const mailbox = await prisma.mailbox.findUnique({ where: { id: mailboxId } });
+    if (!mailbox || !mailbox.imapHost || !mailbox.imapPort || !mailbox.password) return;
+
+    console.log(`Syncing IMAP for mailbox: ${mailbox.email}`);
+
+    const client = new ImapFlow({
+      host: mailbox.imapHost,
+      port: mailbox.imapPort,
+      secure: mailbox.imapPort === 993,
+      auth: {
+        user: mailbox.email,
+        pass: mailbox.password,
+      },
+      logger: false
+    });
+
+    try {
+      await client.connect();
+      const lock = await client.getMailboxLock("INBOX");
+      
+      try {
+        // Fetch unseen messages
+        for await (const message of client.fetch("1:*", { envelope: true, source: true }, { uid: true, unseen: true })) {
+          const envelope = message.envelope;
+          const fromEmail = envelope.from[0]?.address;
+          if (!fromEmail) continue;
+
+          // Simple bounce detection
+          const isBounce = envelope.subject?.toLowerCase().includes("undeliverable") || 
+                           fromEmail.toLowerCase().includes("mailer-daemon");
+
+          let lead = await prisma.lead.findFirst({
+            where: { email: fromEmail }
+          });
+
+          if (isBounce && lead) {
+            await prisma.lead.update({
+              where: { id: lead.id },
+              data: { status: "BOUNCED" }
+            });
+            console.log(`Bounced: ${fromEmail}`);
+          } else if (lead) {
+            await prisma.lead.update({
+              where: { id: lead.id },
+              data: { status: "REPLIED" }
+            });
+            console.log(`Replied: ${fromEmail}`);
+          }
+
+          // Save to Unified Inbox
+          await prisma.inboxMessage.create({
+            data: {
+              organizationId: mailbox.domain.organizationId,
+              mailboxId: mailbox.id,
+              leadId: lead?.id,
+              fromEmail: fromEmail,
+              subject: envelope.subject || "No Subject",
+              body: message.source.toString().substring(0, 5000), // truncate for MVP
+              receivedAt: envelope.date || new Date(),
+            }
+          });
+
+          // Mark as read
+          await client.messageFlagsAdd({ uid: message.uid }, ["\\Seen"], { uid: true });
+        }
+      } finally {
+        lock.release();
+      }
+      
+      await client.logout();
+      
+      await prisma.mailbox.update({
+        where: { id: mailbox.id },
+        data: { lastSyncedAt: new Date() }
+      });
+
+    } catch (error: any) {
+      console.error(`IMAP Sync failed for ${mailbox.email}:`, error.message);
+    }
+  }
+}, { connection });
+
+
 campaignWorker.on("failed", (job, err) => {
   console.error(`Campaign Job ${job?.id} failed:`, err.message);
 });
 
 emailSenderWorker.on("failed", (job, err) => {
   console.error(`Email Job ${job?.id} failed:`, err.message);
+});
+
+imapSyncWorker.on("failed", (job, err) => {
+  console.error(`IMAP Sync Job ${job?.id} failed:`, err.message);
 });

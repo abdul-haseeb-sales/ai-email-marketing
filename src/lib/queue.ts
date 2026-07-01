@@ -18,3 +18,12 @@ export const emailQueue = new Queue("email-sending-queue", {
     removeOnFail: false,
   }
 });
+
+export const imapSyncQueue = new Queue("imap-sync-queue", {
+  connection,
+  defaultJobOptions: {
+    attempts: 1,
+    removeOnComplete: true,
+    removeOnFail: false,
+  }
+});

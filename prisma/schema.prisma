@@ -19,7 +19,8 @@ model Organization {
   leads     Lead[]
   templates Template[]
   campaigns Campaign[]
-  emailLogs EmailLog[]
+  emailLogs     EmailLog[]
+  inboxMessages InboxMessage[]
 }
 
 model User {
@@ -84,6 +85,7 @@ model Mailbox {
 
   domain           Domain   @relation(fields: [domainId], references: [id], onDelete: Cascade)
   campaigns        Campaign[]
+  inboxMessages    InboxMessage[]
 }
 
 model LeadList {
@@ -121,6 +123,7 @@ model Lead {
   organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   list             LeadList?    @relation(fields: [listId], references: [id], onDelete: SetNull)
   emailLogs        EmailLog[]
+  inboxMessages    InboxMessage[]
 
   @@unique([organizationId, email])
 }
@@ -175,4 +178,22 @@ model EmailLog {
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   campaign       Campaign?    @relation(fields: [campaignId], references: [id], onDelete: SetNull)
   lead           Lead         @relation(fields: [leadId], references: [id], onDelete: Cascade)
+}
+
+model InboxMessage {
+  id             String   @id @default(cuid())
+  organizationId String
+  mailboxId      String
+  leadId         String?
+  fromEmail      String
+  subject        String
+  body           String   @db.Text
+  isRead         Boolean  @default(false)
+  receivedAt     DateTime
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  mailbox        Mailbox      @relation(fields: [mailboxId], references: [id], onDelete: Cascade)
+  lead           Lead?        @relation(fields: [leadId], references: [id], onDelete: SetNull)
 }
