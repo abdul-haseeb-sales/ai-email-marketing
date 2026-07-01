@@ -1,0 +1,80 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users     User[]
+  domains   Domain[]
+}
+
+model User {
+  id             String       @id @default(cuid())
+  organizationId String
+  name           String?
+  email          String       @unique
+  passwordHash   String?
+  role           Role         @default(USER)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+enum Role {
+  SUPER_ADMIN
+  ADMIN
+  SALES_USER
+  VIEWER
+  USER
+}
+
+model Domain {
+  id               String       @id @default(cuid())
+  organizationId   String
+  domainName       String       @unique
+  spfStatus        String       @default("PENDING")
+  dkimStatus       String       @default("PENDING")
+  dmarcStatus      String       @default("PENDING")
+  mxStatus         String       @default("PENDING")
+  sslStatus        String       @default("PENDING")
+  blacklistStatus  String       @default("CLEAN")
+  healthScore      Int          @default(100)
+  sendingStatus    String       @default("SAFE")
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  mailboxes        Mailbox[]
+}
+
+model Mailbox {
+  id               String   @id @default(cuid())
+  domainId         String
+  email            String   @unique
+  displayName      String?
+  smtpHost         String?
+  smtpPort         Int?
+  imapHost         String?
+  imapPort         Int?
+  dailyLimit       Int      @default(10)
+  hourlyLimit      Int      @default(2)
+  cooldownSeconds  Int      @default(120)
+  status           String   @default("ACTIVE")
+  signature        String?  @db.Text
+  lastSentAt       DateTime?
+  lastSyncedAt     DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  domain           Domain   @relation(fields: [domainId], references: [id], onDelete: Cascade)
+}
