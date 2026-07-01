@@ -18,9 +18,10 @@ model Organization {
   lists     LeadList[]
   leads     Lead[]
   templates Template[]
-  campaigns Campaign[]
+  campaigns     Campaign[]
   emailLogs     EmailLog[]
   inboxMessages InboxMessage[]
+  erpnextSettings ERPNextSettings?
 }
 
 model User {
@@ -114,7 +115,9 @@ model Lead {
   industry         String?
   city             String?
   country          String?
-  source           String?
+  source           String   @default("MANUAL") // MANUAL, CSV, ERPNEXT
+  erpnextId        String?  // ERPNext document name
+  erpnextType      String?  // 'Lead' or 'Contact'
   status           String   @default("NEW") // NEW, CONTACTED, REPLIED, BOUNCED, UNSUBSCRIBED
   verificationStatus String @default("UNVERIFIED") // UNVERIFIED, VALID, INVALID
   createdAt        DateTime @default(now())
@@ -196,4 +199,19 @@ model InboxMessage {
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   mailbox        Mailbox      @relation(fields: [mailboxId], references: [id], onDelete: Cascade)
   lead           Lead?        @relation(fields: [leadId], references: [id], onDelete: SetNull)
+}
+
+model ERPNextSettings {
+  id             String   @id @default(cuid())
+  organizationId String   @unique
+  url            String
+  apiKey         String
+  apiSecret      String
+  autoSyncLeads  Boolean  @default(true)
+  autoSyncContacts Boolean @default(true)
+  lastSyncAt     DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 }
