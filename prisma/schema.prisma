@@ -15,6 +15,9 @@ model Organization {
 
   users     User[]
   domains   Domain[]
+  lists     LeadList[]
+  leads     Lead[]
+  templates Template[]
 }
 
 model User {
@@ -78,4 +81,54 @@ model Mailbox {
   updatedAt        DateTime @updatedAt
 
   domain           Domain   @relation(fields: [domainId], references: [id], onDelete: Cascade)
+}
+
+model LeadList {
+  id             String       @id @default(cuid())
+  organizationId String
+  name           String
+  description    String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  leads          Lead[]
+}
+
+model Lead {
+  id               String   @id @default(cuid())
+  organizationId   String
+  listId           String?
+  firstName        String?
+  lastName         String?
+  businessName     String?
+  email            String
+  phone            String?
+  website          String?
+  industry         String?
+  city             String?
+  country          String?
+  source           String?
+  status           String   @default("NEW") // NEW, CONTACTED, REPLIED, BOUNCED, UNSUBSCRIBED
+  verificationStatus String @default("UNVERIFIED") // UNVERIFIED, VALID, INVALID
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  list             LeadList?    @relation(fields: [listId], references: [id], onDelete: SetNull)
+
+  @@unique([organizationId, email])
+}
+
+model Template {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  category       String?  // e.g., Real Estate, Healthcare
+  subject        String
+  body           String   @db.Text
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 }
